@@ -26,6 +26,7 @@ data/*.txt
 figs/*.png
 figs/*.pdf
 results/*
+neuro_analysis/outputs/*
 
 # CUDA JIT build artifacts
 *.so

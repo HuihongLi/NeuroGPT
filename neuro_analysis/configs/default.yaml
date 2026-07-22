@@ -1,0 +1,27 @@
+# Config for the SpikeGPT neural-data-analysis study (216M pile model, RNN inference path).
+# Mirrors the model fields in run.py so capture reproduces that forward pass exactly.
+
+# --- model (must match the checkpoint) ---
+model_name: model/SpikeGPT-216M
+n_layer: 18
+n_embd: 768
+ctx_len: 1024
+vocab_size: 50277
+run_device: cpu        # cpu + fp32 works and is reasonably fast (see CLAUDE.md)
+float_mode: fp32
+
+# --- tokenizer ---
+token_mode: pile       # 'pile' (20B tokenizer) or 'char' (vocab_book, vocab_size 77)
+word_name:
+  - data/20B_tokenizer.json
+  - data/20B_tokenizer.json
+unknown_char: null
+
+# --- analysis ---
+branch: attn           # 'attn' (mem1) or 'ffn' (mem2)
+target: is_content     # decoding target: is_content | pos_tag | position | token_id
+out_dir: neuro_analysis/outputs
+
+stages:
+  capture: true        # run forward passes + save responses.npz (slow; do once)
+  compare: true        # geometry + decoding + V-vs-S figures (cheap; iterate freely)

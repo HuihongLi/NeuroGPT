@@ -63,7 +63,7 @@ os.environ["RWKV_RUN_DEVICE"] = args.RUN_DEVICE
 ########################################################################################################
 # Step 2: set prompt & sampling stuffs
 ########################################################################################################
-context = 'Shenzhen is a major city in Guangdong Province in southern China. It is located next to Hong Kong and is widely known for its technology industry, manufacturing sector, and rapid economic development. The city'
+# context = 'Shenzhen is a major city in Guangdong Province in southern China. It is located next to Hong Kong and is widely known for its technology industry, manufacturing sector, and rapid economic development. The city'
 # context = 'A'
 #context = "\nIn the"
 #context = 'Pinky \n The pink ghost’s AI is designed to ”feel” opposite of the red ghost’s behavior. Pinky actually attempts to get out in front of Pac-Man. This is accomplished by setting the target 4 tiles ahead of Pac-Man’s current location in the direction that Pac-Man is travelling. One exception to this is when Pac-Man is traveling up. Due to an overflow bug in the code, the calculation includes a left offset equal to the expected up offset.'
@@ -78,14 +78,27 @@ context = 'Shenzhen is a major city in Guangdong Province in southern China. It 
 # context = "\n東京は" # test Japanese
 
 # ###### A good prompt for Q&A ######
-# context = '''
-# Questions & Helpful Answers
-# Ask Research Experts
-# Question:
-# Can penguins fly?
+context = '''
+Questions & Helpful Answers
+Ask Research Experts
+Question:
+Can penguins fly?
 
 # Full Answer:
 # '''
+
+# context = """
+# Neuroscience Questions and Answers
+
+# Question: What is an action potential?
+# Answer: An action potential is a brief electrical event generated when a neuron’s membrane potential crosses a threshold. It allows neurons to transmit information as discrete spikes.
+
+# Question: What is membrane potential?
+# Answer: Membrane potential is the voltage difference across a neuron’s membrane. Subthreshold changes in membrane potential reflect incoming signals even when the neuron does not produce a spike.
+
+# Question: What information may be present in membrane-potential dynamics but absent from binary spike trains, and how can the mean inter-spike interval and ISI coefficient of variation be used to characterize neuronal firing?
+# Answer: 
+# """
 
 # ###### A good prompt for chatbot ######
 # context = '''
@@ -107,13 +120,14 @@ context = 'Shenzhen is a major city in Guangdong Province in southern China. It 
 
 # Bot: It’s a large and very expensive piece of science equipment. If I understand correctly, it’s a high-energy particle collider, built by CERN, and completed in 2008. They used it to confirm the existence of the Higgs boson in 2012.
 
-# User:''' # type your question here
+# User: so what is the capital of france?
+# ''' # type your question here
 
 NUM_TRIALS = 1
-LENGTH_PER_TRIAL = 100
+LENGTH_PER_TRIAL = 333
 
 TEMPERATURE = 0.8
-top_p = 0.9
+top_p = 0.7
 top_p_newline = 0.9  # only used in TOKEN_MODE = char
 
 DEBUG_DEBUG = False  # True False --> show softmax output
