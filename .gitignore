@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Caches
+.cache/
+
+# Model checkpoints (large binaries — download / train locally)
+*.pth
+*.pt
+
+# Datasets (tokenizers in data/ are tracked; ignore raw corpora)
+data/enwik8
+data/*.txt
+*.bin
+*.idx
+
+# Generated outputs
+figs/*.png
+figs/*.pdf
+results/*
+
+# CUDA JIT build artifacts
+*.so
+
+# Keep placeholder files so empty dirs are tracked
+!**/.gitkeep

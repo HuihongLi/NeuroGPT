@@ -20,9 +20,9 @@ torch.backends.cuda.matmul.allow_tf32 = True
 
 ### Step 1: set training data ##########################################################################
 
-datafile_train = "enwik8" # txt file or binidx file
-datafile_valid = "valid.txt"
-datafile_test = "test.txt"
+datafile_train = "data/enwik8" # txt file or binidx file
+datafile_valid = "data/valid.txt"
+datafile_test = "data/test.txt"
 datafile_encoding = 'utf-8'
 # datafile_encoding = 'utf-16le'
 
@@ -50,7 +50,7 @@ lr_final = 1e-5
 n_epoch = 1000
 # 0 = never, 1 = every mini-epoch, 2 = every two mini-epochs, etc.
 epoch_save_frequency = 10
-epoch_save_path = 'your_path'
+epoch_save_path = 'model/trained-'
 
 epoch_length_fixed = 10000
 
@@ -108,5 +108,5 @@ if __name__ == '__main__':
 
     trainer.train()
 
-    torch.save(model.state_dict(), 'trained-' + str(n_epoch) + '-' + trainer.get_run_name() +
+    torch.save(model.state_dict(), 'model/trained-' + str(n_epoch) + '-' + trainer.get_run_name() +
                '-' + datetime.datetime.today().strftime('%Y-%m-%d-%H-%M-%S') + '.pth')

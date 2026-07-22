@@ -12,7 +12,7 @@ from src.spikingjelly.clock_driven import functional
 from transformers import DataCollatorWithPadding
 import os
 
-tokenizer = PreTrainedTokenizerFast(tokenizer_file='tools/20B_tokenizer.json')
+tokenizer = PreTrainedTokenizerFast(tokenizer_file='data/20B_tokenizer.json')
 
 tokenizer.pad_token = "<|padding|>"
 model = GPT(GPTConfig(vocab_size=50277, ctx_len=1024, model_type='RWKV', n_layer=24, n_embd=768, num_classes=2))

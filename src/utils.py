@@ -113,7 +113,7 @@ class TOKENIZER():
 
         lastChar = int(x[-1])
 
-        probs = F.softmax(torch.tensor(out), dim=-1)
+        probs = F.softmax(out.detach().clone().float(), dim=-1)
 
         if self.charMode:
             if self.itos[lastChar] == '\n':

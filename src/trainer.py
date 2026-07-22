@@ -29,7 +29,7 @@ torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.allow_tf32 = True
 torch.backends.cuda.matmul.allow_tf32 = True
 
-log_file = open("wik8-0.01.txt", "a")
+log_file = open("results/wik8-0.01.txt", "a")
 
 
 class TrainerConfig:

@@ -22,7 +22,7 @@ args = types.SimpleNamespace()
 # Step 1: set model & config (use v4 to run your trained-from-scratch models. v4 and v4neo are compatible)
 ########################################################################################################
 
-args.RUN_DEVICE = "cuda" # 'cuda' // 'cpu' (already fast)
+args.RUN_DEVICE = "cpu" # 'cuda' // 'cpu' (already fast)
 args.FLOAT_MODE = "fp32" # fp16 (good for GPU, does not work for CPU) // fp32 (good for CPU) // bf16 (less accurate, but works for CPU)
 
 # if args.RUN_DEVICE == "cuda":
@@ -31,20 +31,20 @@ os.environ["RWKV_JIT_ON"] = '1' # '1' or '0'. very useful for GPU/CPU fp32, but 
 
 #For BookCorpus Pre-trained model
 # TOKEN_MODE = "char"
-# WORD_NAME = "vocab_book"
+# WORD_NAME = "data/vocab_book"
 # UNKNOWN_CHAR = ' '
 # vocab_size = 77
 
 #For 216M OpenWebText Pre-trained model
 TOKEN_MODE = "pile"
 WORD_NAME = [
-    "20B_tokenizer.json",
-    "20B_tokenizer.json",
+    "data/20B_tokenizer.json",
+    "data/20B_tokenizer.json",
 ]  # [vocab, vocab] for Pile model
 UNKNOWN_CHAR = None
 vocab_size = 50277
 
-MODEL_NAME = 'SpikeGPT-216M'
+MODEL_NAME = 'model/SpikeGPT-216M'
 n_layer = 18
 n_embd = 768
 ctx_len = 1024
@@ -63,14 +63,14 @@ os.environ["RWKV_RUN_DEVICE"] = args.RUN_DEVICE
 ########################################################################################################
 # Step 2: set prompt & sampling stuffs
 ########################################################################################################
-
+context = 'Shenzhen is a major city in Guangdong Province in southern China. It is located next to Hong Kong and is widely known for its technology industry, manufacturing sector, and rapid economic development. The city'
 # context = 'A'
 #context = "\nIn the"
 #context = 'Pinky \n The pink ghost’s AI is designed to ”feel” opposite of the red ghost’s behavior. Pinky actually attempts to get out in front of Pac-Man. This is accomplished by setting the target 4 tiles ahead of Pac-Man’s current location in the direction that Pac-Man is travelling. One exception to this is when Pac-Man is traveling up. Due to an overflow bug in the code, the calculation includes a left offset equal to the expected up offset.'
 #context = '''Corporal Michael P. Goeldin was an unskilled laborer from Ireland when he enlisted in Company A in November 1860. Goldein survived the war. Corporal Patrick O’Neal, also from Ireland, first enlisted in 1854 and served with Company L, 3d U.S. Artillery, in Oregon. He returned to the East Coast and enlisted in the company in 1860. O’Neal served until 1874, when he was named superintendent of the National Cemetery at Willets Point, New York. Corporal Benjamin Browne was a shoemaker from Orange County, New York. In August 1862, he enlisted in the newly formed 124th New York Volunteers, and was one of sixty-one men who transferred into Company A that October. Browne reenlisted in the company in February 1864 while it was camped at Brandy Station. He returned to civilian life after completing his enlistment in 1867.
 #On 10 June, Artificer William Collins was promoted to corporal, probably to fill a combat leadership void for the crossing of the James River. Collins’s service record does not reflect the qualities he demonstrated to earn this promotion, but he had obviously overcome some serious problems. Born in Sacketts Harbor, New York, Collins enlisted in the company in December 1853 at the age of twenty-two, and reenlisted in December 1858. Just a month before the war began in April 1861, Collins went ”over the hill” and was not caught until three years later. Returned to the company on 22 March 1864, he was tried'''
 #context = 'Aaron loves mint chocolate cake, but he requires that it be paired with mini chocolate chips, so I threw some of those in between the layers. I also had a few Peppermint Jo Jos on hand so I crushed them up and threw some of those in along with some crushed meringue cookies because, why not? It’s a total smorgasbord of minty chocolate chippy cookie crunchy goodness. I didn’t measure how much of each topping I used, but after I tasted the finished product, I wish I had added more. You can add anything you want- crushed candy canes, peppermint bark, etc. And don’t be afraid to use a heavy hand. Texture = good.'
-context = 'Prehistoric man sketched an incredible array of prehistoric beasts on the rough limestone walls of a cave in modern day France 36,000 years ago. Now, with the help of cutting-edge technology, those works of art in the Chauvet-Pont-d’Arc Cave have been reproduced to create the biggest replica cave in the world. The manmade cavern named the Caverne du Pont-d’Arc has been built a few miles from the original site in Vallon-Pont-D’arc in Southern France and contains 1,000 painstakingly-reproduced drawings as well as around 450 bones and other features...\n Cavemen and women sketched an incredible array of prehistoric beasts on the rough limestone walls of a cave 36,000 years ago and now a replica has been created (pictured)'
+# context = 'Prehistoric man sketched an incredible array of prehistoric beasts on the rough limestone walls of a cave in modern day France 36,000 years ago. Now, with the help of cutting-edge technology, those works of art in the Chauvet-Pont-d’Arc Cave have been reproduced to create the biggest replica cave in the world. The manmade cavern named the Caverne du Pont-d’Arc has been built a few miles from the original site in Vallon-Pont-D’arc in Southern France and contains 1,000 painstakingly-reproduced drawings as well as around 450 bones and other features...\n Cavemen and women sketched an incredible array of prehistoric beasts on the rough limestone walls of a cave 36,000 years ago and now a replica has been created (pictured)'
 # context = '\nSugar:'
 # context = "In a shocking finding, scientist discovered a herd of dragons living in a remote, previously unexplored valley, in Tibet. Even more surprising to the researchers was the fact that the dragons spoke perfect Chinese."
 
@@ -109,14 +109,20 @@ context = 'Prehistoric man sketched an incredible array of prehistoric beasts on
 
 # User:''' # type your question here
 
-NUM_TRIALS = 999
-LENGTH_PER_TRIAL = 333
+NUM_TRIALS = 1
+LENGTH_PER_TRIAL = 100
 
-TEMPERATURE = 1.5
-top_p = 0.7
+TEMPERATURE = 0.8
+top_p = 0.9
 top_p_newline = 0.9  # only used in TOKEN_MODE = char
 
 DEBUG_DEBUG = False  # True False --> show softmax output
+
+# ---- Spiking-activity visualization (see src/spike_vis.py) ----
+VISUALIZE = True                    # save a spike / membrane-voltage / firing-rate figure of this run
+VIS_OUT = "figs/spikegpt_activity.png"
+VIS_LAYER = n_layer // 2            # block used for the detailed membrane-voltage panel
+VIS_RASTER_NEURONS = 40            # channels shown per layer in the raster grid
 
 ########################################################################################################
 
@@ -170,6 +176,11 @@ mem1 = None
 mem2 = None
 out = None
 
+if VISUALIZE:
+    import src.spike_vis as sv
+    vis_stores = None          # (spikes_sa, spikes_ff, curr_sa), set once mem lists exist
+    vis_input_emb = []         # embedding fed into the network per generated token
+
 for TRIAL in range(1 if DEBUG_DEBUG else NUM_TRIALS):
     print(("-" * 50) + '\n' + context, end="")
 
@@ -185,6 +196,10 @@ for TRIAL in range(1 if DEBUG_DEBUG else NUM_TRIALS):
                 init_state, mem1, mem2 = model.forward(x, init_state, mem1, mem2, preprocess_only=True)
         gc.collect()
         torch.cuda.empty_cache()
+
+        # attach spike hooks now that mem1/mem2 exist; generation steps get recorded below
+        if VISUALIZE and vis_stores is None:
+            vis_stores = sv.attach_hooks(mem1, mem2)
 
     record_time('preprocess')
     out_last = src_len
@@ -213,6 +228,9 @@ for TRIAL in range(1 if DEBUG_DEBUG else NUM_TRIALS):
         ttt = int(ttt)
         ctx += [ttt]
 
+        if VISUALIZE and TRIAL == 0:
+            vis_input_emb.append(model.w.emb.weight[ttt].detach().cpu().float().numpy())
+
         if tokenizer.charMode:
             char = tokenizer.itos[ttt]
             print(char, end="", flush=True)
@@ -229,3 +247,7 @@ for TRIAL in range(1 if DEBUG_DEBUG else NUM_TRIALS):
     )
 
 print(("-" * 50) + '\n')
+
+if VISUALIZE and vis_stores is not None:
+    sv.render(*vis_stores, vis_input_emb, out_path=VIS_OUT,
+              length=LENGTH_PER_TRIAL, vis_layer=VIS_LAYER, raster_neurons=VIS_RASTER_NEURONS)
