@@ -101,11 +101,36 @@ def joint_decode(resp, labels, branch, layer, target, signals=("voltage", "spike
     return {"singles": singles, "joint": joint, "gain": joint - max(singles.values())}
 
 
-def lagged_decode(resp, labels, signal, branch, layer, target, max_lag=8, **kw):
-    """H3: decode the token at t-lag from activity at t, for lag=0..max_lag.
-    Voltage should retain past-token information over more lags than spikes.
+def lagged_decode(resp, labels, signal, branch, layer, target, max_lag=8, n_splits=5):
+    """Decode the token at t-lag from activity at t, for lag=0..max_lag (grouped CV).
+    Voltage should retain past-token information over more lags than spikes (memory probe).
+    Returns dict{lag: balanced_accuracy}."""
+    from .representations import condition_matrix
+    X, prov = condition_matrix(resp, signal, branch, layer)
+    out = {}
+    for lag in range(max_lag + 1):
+        Xs, y, groups = [], [], []
+        for k, (s, t) in enumerate(prov):
+            if t - lag >= 0:
+                Xs.append(X[k]); y.append(labels[target][s][t - lag]); groups.append(s)
+        Xs, y, groups = np.asarray(Xs), np.asarray(y), np.asarray(groups)
+        if len(np.unique(y)) < 2 or len(np.unique(groups)) < 2:
+            out[lag] = np.nan
+            continue
+        gkf = GroupKFold(n_splits=min(n_splits, len(np.unique(groups))))
+        sc = [balanced_accuracy_score(y[te], _clf().fit(Xs[tr], y[tr]).predict(Xs[te]))
+              for tr, te in gkf.split(Xs, y, groups)]
+        out[lag] = float(np.mean(sc))
+    return out
 
-    TODO (M4): build lagged label grids (shift `labels[target]` by lag within stimulus,
-    dropping the first `lag` tokens) and call decode() for each; return acc-vs-lag.
-    """
-    raise NotImplementedError("Build lagged label grids per docstring; decode() is ready.")
+
+def joint_depth(resp, labels, branch, n_layer, target, **kw):
+    """H3 across depth: voltage-only, spike-only, joint [V‖S] accuracy and the joint gain
+    per layer. Returns dict of (n_layer,) arrays."""
+    from . import track
+    v, s, j, g = (np.full(n_layer, np.nan) for _ in range(4))
+    for l in track(range(n_layer), desc=f"joint decode/{branch}:{target}", leave=False):
+        r = joint_decode(resp, labels, branch, l, target, **kw)
+        v[l], s[l] = r["singles"]["voltage"], r["singles"]["spikes"]
+        j[l], g[l] = r["joint"], r["gain"]
+    return {"voltage": v, "spikes": s, "joint": j, "gain": g}

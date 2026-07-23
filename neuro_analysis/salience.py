@@ -43,10 +43,21 @@ def spike_uncertainty_corr(resp, labels, branch, n_layer, key="surprisal"):
 
 
 def spike_triggered_contrast(resp, labels, branch, layer, key="surprisal", q=0.25):
-    """Compare mean spike count for high- vs low-uncertainty tokens (top/bottom quartile).
-    Returns (mean_high, mean_low, cohens_d). The core H2 effect-size statistic.
+    """Compare mean population spike count for high- vs low-uncertainty tokens (top/bottom
+    quantile `q`). Returns dict(mean_high, mean_low, cohens_d). The core H2 effect size:
+    positive d = spikes are elevated at salient/surprising tokens.
 
-    TODO (M4): add a matched-position / matched-frequency control so the contrast is not
-    confounded by sentence position or token frequency.
+    NOTE: no position/frequency control yet — a matched-position null would strengthen the
+    claim that the effect is uncertainty, not sentence position.
     """
-    raise NotImplementedError("Implement quartile split + Cohen's d per docstring.")
+    T = resp["spikes"][branch].shape[1]
+    u = _pad_label(labels[key], T).ravel()
+    c = population_spike_count(resp, branch, layer).ravel()
+    m = ~(np.isnan(u) | np.isnan(c))
+    u, c = u[m], c[m]
+    if u.size < 4:
+        return {"mean_high": np.nan, "mean_low": np.nan, "cohens_d": np.nan}
+    hi, lo = c[u >= np.quantile(u, 1 - q)], c[u <= np.quantile(u, q)]
+    pooled = np.sqrt((hi.var(ddof=1) + lo.var(ddof=1)) / 2) + 1e-12
+    return {"mean_high": float(hi.mean()), "mean_low": float(lo.mean()),
+            "cohens_d": float((hi.mean() - lo.mean()) / pooled)}

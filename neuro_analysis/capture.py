@@ -118,6 +118,33 @@ def _softmax(z):
     return e / e.sum()
 
 
+def _pull(stores, per, n_layer, vparams):
+    """Append one just-run sequence's activity (spikes, current, reconstructed voltage) to
+    the per-condition accumulators. stores[sig][br][l] holds L arrays of [n_embd]."""
+    for br in ("attn", "ffn"):
+        for sig in ("spikes", "current"):
+            arr = np.stack([np.stack(stores[sig][br][l], 0) for l in range(n_layer)], 1)
+            per[sig][br].append(arr)                           # [L, n_layer, n_embd]
+        tau, vth, vr, di = vparams[br]
+        cur = per["current"][br][-1]
+        V = np.stack([reconstruct_V(cur[:, l, :], tau, vth, vr, di)
+                      for l in range(n_layer)], 1)
+        per["voltage"][br].append(V)
+
+
+def _assemble(per, n_stim, T, n_layer, n_embd):
+    """Pad the per-sequence lists into (n_stim, T, n_layer, n_embd) arrays, NaN in the tail."""
+    resp = {}
+    for sig in per:
+        resp[sig] = {}
+        for br in per[sig]:
+            out = np.full((n_stim, T, n_layer, n_embd), np.nan, dtype=np.float32)
+            for s, a in enumerate(per[sig][br]):
+                out[s, : a.shape[0]] = a
+            resp[sig][br] = out
+    return resp
+
+
 def capture(model, stimuli_tokens, ctx_len, n_layer):
     """Run every stimulus with reset-in-between and return (resp, lengths, aux).
 
@@ -152,16 +179,7 @@ def capture(model, stimuli_tokens, ctx_len, n_layer):
             out, state, mem1, mem2 = model.forward(x, state, mem1, mem2)
             logit_seq.append(out.detach().cpu().float().numpy().reshape(-1))
 
-        # pull hooked activations: stores[sig][br][l] -> list of L arrays [n_embd]
-        for br in ("attn", "ffn"):
-            for sig in ("spikes", "current"):
-                arr = np.stack([np.stack(stores[sig][br][l], 0) for l in range(n_layer)], 1)
-                per[sig][br].append(arr)                      # [L, n_layer, n_embd]
-            tau, vth, vr, di = vparams[br]
-            cur = per["current"][br][-1]                       # [L, n_layer, n_embd]
-            V = np.stack([reconstruct_V(cur[:, l, :], tau, vth, vr, di)
-                          for l in range(n_layer)], 1)
-            per["voltage"][br].append(V)
+        _pull(stores, per, n_layer, vparams)
 
         # H2/H4 label sources from the model's own logits + input embeddings
         P = np.stack([_softmax(z) for z in logit_seq], 0)      # [L, vocab]
@@ -175,17 +193,61 @@ def capture(model, stimuli_tokens, ctx_len, n_layer):
         aux["entropy"].append(entropy)
         aux["embedding"].append(emb)
 
-    # pad each (n_stim, T, n_layer, n_embd), NaN in the padding
-    resp = {}
-    n_stim = len(stimuli_tokens)
-    for sig in per:
-        resp[sig] = {}
-        for br in per[sig]:
-            out = np.full((n_stim, T, n_layer, n_embd), np.nan, dtype=np.float32)
-            for s, a in enumerate(per[sig][br]):
-                out[s, : a.shape[0]] = a
-            resp[sig][br] = out
+    resp = _assemble(per, len(stimuli_tokens), T, n_layer, n_embd)
     return resp, lengths, aux
+
+
+def capture_rollout(model, tokenizer, prompt_tokens, n_generate, ctx_len, n_layer,
+                    temperature=0.8, top_p=0.7, top_p_newline=0.9):
+    """SPONTANEOUS condition: prime on a short prompt, then let the model generate its own
+    continuation and record internal activity during the SELF-GENERATED tokens only.
+
+    Artificial analogue of spontaneous (vs stimulus-evoked) neural activity: the network runs
+    on its own predictions instead of ground-truth input. The prompt builds state but its
+    activity is discarded (clear_stores) so only rollout tokens are kept.
+
+    Returns (resp, lengths, aux, gen_tokens); T = n_generate (all sequences equal length).
+    aux surprisal is the SELF-surprisal −log p(sampled token) under the model's own dist.
+    """
+    _out, state, mem1, mem2 = model.forward(prompt_tokens[0][:1], None, None, None)
+    stores, _handles = attach_hooks(mem1, mem2)
+    n_embd = state.shape[1]
+    vparams = {"attn": lif_params(mem1[0]), "ffn": lif_params(mem2[0])}
+    per = {sig: {"attn": [], "ffn": []} for sig in ("spikes", "current", "voltage")}
+    aux = {"surprisal": [], "entropy": [], "embedding": []}
+    gen_tokens = []
+    embw = model.w.emb.weight.detach().cpu().float().numpy()
+
+    from . import track
+    for prompt in track(prompt_tokens, desc="rollout (prompts)"):
+        state = reset_state(state, mem1, mem2)
+        ctx = list(prompt)
+        out = None
+        for i in range(len(ctx)):                              # prime on the prompt
+            out, state, mem1, mem2 = model.forward(ctx[: i + 1][-ctx_len:], state, mem1, mem2)
+        clear_stores(stores)                                   # discard prompt activity
+
+        toks, surpr, entropy = [], [], []
+        for _ in range(n_generate):
+            out_np = out.detach().cpu().float().numpy().reshape(-1)
+            out_np[0] = -1e30                                  # disable <|endoftext|> (pile)
+            p = _softmax(out_np)
+            nxt = int(tokenizer.sample_logits(out, ctx, ctx_len, temperature=temperature,
+                                              top_p_usual=top_p, top_p_newline=top_p_newline))
+            surpr.append(-np.log(p[nxt] + 1e-12))              # self-surprisal of the sample
+            entropy.append(-(p * np.log(p + 1e-12)).sum())     # uncertainty that produced it
+            ctx.append(nxt); toks.append(nxt)
+            out, state, mem1, mem2 = model.forward(ctx[-ctx_len:], state, mem1, mem2)  # records nxt
+
+        _pull(stores, per, n_layer, vparams)
+        aux["surprisal"].append(np.array(surpr))
+        aux["entropy"].append(np.array(entropy))
+        aux["embedding"].append(embw[toks])
+        gen_tokens.append(toks)
+
+    resp = _assemble(per, len(prompt_tokens), n_generate, n_layer, n_embd)
+    lengths = np.full(len(prompt_tokens), n_generate, dtype=int)
+    return resp, lengths, aux, gen_tokens
 
 
 def save_archive(path, resp, labels, meta):

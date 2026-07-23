@@ -42,15 +42,49 @@ def trajectory_smoothness(traj):
     return {"path_length": path_len, "mean_curvature": float(curv.mean())}
 
 
-def jpca(X, k=6):
-    """Minimal jPCA: fit the best skew-symmetric dynamics on the top-k PCs and return
-    the leading rotational plane's eigenfrequency (rotational structure strength).
+def jpca(trajs, k=6):
+    """Minimal jPCA (Churchland et al.): fit the best skew-symmetric dynamics matrix M on
+    the top-k PCs of the pooled states, so state-derivative ≈ state · M with M = -Mᵀ.
 
-    TODO (M2/M4): full Churchland-style jPCA (state + state-derivative regression,
-    projection onto the top skew-symmetric eigenplane). Stub returns the top PCA plane.
+    trajs : list of (T_i x n_embd) trajectories (temporal order matters — one per stimulus).
+    Returns dict(M_skew, eig, rotation_freq); rotation_freq = max |Im(eig)| indexes the
+    strength of rotational (oscillatory) population dynamics.
     """
-    p, evr = pca_fit(X, n_components=k)
-    raise NotImplementedError("Implement skew-symmetric dynamics fit; PCA scaffold ready.")
+    trajs = [t for t in trajs if len(t) >= 2]
+    allX = np.concatenate(trajs, 0)
+    p, _ = pca_fit(allX, n_components=k)
+    Xs, Xd = [], []
+    for tr in trajs:
+        z = p.transform(tr - p.mean_)
+        Xs.append(z[:-1]); Xd.append(np.diff(z, axis=0))
+    Xs, Xd = np.concatenate(Xs, 0), np.concatenate(Xd, 0)
+    M, *_ = np.linalg.lstsq(Xs, Xd, rcond=None)     # unconstrained fit
+    M_skew = 0.5 * (M - M.T)                          # skew-symmetric (pure rotation) part
+    eig = np.linalg.eigvals(M_skew)
+    return {"M_skew": M_skew, "eig": eig, "rotation_freq": float(np.max(np.abs(eig.imag)))}
+
+
+def smoothness_depth(resp, signal, branch, n_layer, k=6):
+    """Mean trajectory curvature per layer (H1): project each stimulus trajectory into a
+    per-layer PCA(k) space and average curvature over stimuli. Voltage should be smoother
+    (lower curvature) than spikes."""
+    from .representations import condition_matrix, trajectory
+    from . import track
+    out = np.full(n_layer, np.nan)
+    n_stim = resp[signal][branch].shape[0]
+    for l in track(range(n_layer), desc=f"smoothness {signal}/{branch}", leave=False):
+        X, _ = condition_matrix(resp, signal, branch, l)
+        if len(X) <= k:
+            continue
+        p, _ = pca_fit(X, n_components=k)
+        curvs = []
+        for s in range(n_stim):
+            tr = trajectory(resp, signal, branch, l, s)
+            if len(tr) >= 3:
+                curvs.append(trajectory_smoothness(project_trajectory(tr, p))["mean_curvature"])
+        if curvs:
+            out[l] = float(np.nanmean(curvs))
+    return out
 
 
 def depth_curve(resp, representations, signal, branch, n_layer, metric=participation_ratio):

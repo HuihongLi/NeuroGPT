@@ -22,6 +22,19 @@ branch: attn           # 'attn' (mem1) or 'ffn' (mem2)
 target: is_content     # decoding target: is_content | pos_tag | position | token_id
 out_dir: neuro_analysis/outputs
 
+# Which activity regimes to capture/analyze:
+#   driven      = teacher-forced on real text (DEFAULT_STIMULI)  -> evoked activity
+#   spontaneous = model self-rollout from prompts (DEFAULT_PROMPTS) -> spontaneous activity
+conditions:
+  driven: true
+  spontaneous: true
+
+rollout:                # settings for the spontaneous condition
+  n_generate: 60        # tokens generated per prompt (fixed sequence length)
+  temperature: 0.8
+  top_p: 0.7
+
 stages:
-  capture: true        # run forward passes + save responses.npz (slow; do once)
-  compare: true        # geometry + decoding + V-vs-S figures (cheap; iterate freely)
+  capture: true         # forward passes -> responses_{driven,spont}.npz (slow; do once)
+  compare: true         # per-condition geometry + decoding battery (H1-H4)
+  contrast: true        # driven-vs-spontaneous contrast (needs both conditions)

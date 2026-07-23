@@ -78,27 +78,27 @@ os.environ["RWKV_RUN_DEVICE"] = args.RUN_DEVICE
 # context = "\n東京は" # test Japanese
 
 # ###### A good prompt for Q&A ######
-context = '''
-Questions & Helpful Answers
-Ask Research Experts
-Question:
-Can penguins fly?
+# context = '''
+# Questions & Helpful Answers
+# Ask Research Experts
+# Question:
+# Can penguins fly?
 
-# Full Answer:
-# '''
+# # Full Answer:
+# # '''
 
-# context = """
-# Neuroscience Questions and Answers
+context = """
+Neuroscience Questions and Answers
 
-# Question: What is an action potential?
-# Answer: An action potential is a brief electrical event generated when a neuron’s membrane potential crosses a threshold. It allows neurons to transmit information as discrete spikes.
+Question: What is an action potential?
+Answer: An action potential is a brief electrical event generated when a neuron’s membrane potential crosses a threshold. It allows neurons to transmit information as discrete spikes.
 
-# Question: What is membrane potential?
-# Answer: Membrane potential is the voltage difference across a neuron’s membrane. Subthreshold changes in membrane potential reflect incoming signals even when the neuron does not produce a spike.
+Question: What is membrane potential?
+Answer: Membrane potential is the voltage difference across a neuron’s membrane. Subthreshold changes in membrane potential reflect incoming signals even when the neuron does not produce a spike.
 
-# Question: What information may be present in membrane-potential dynamics but absent from binary spike trains, and how can the mean inter-spike interval and ISI coefficient of variation be used to characterize neuronal firing?
-# Answer: 
-# """
+Question: What information may be present in membrane-potential dynamics but absent from binary spike trains, and how can the mean inter-spike interval and ISI coefficient of variation be used to characterize neuronal firing?
+Answer: 
+"""
 
 # ###### A good prompt for chatbot ######
 # context = '''

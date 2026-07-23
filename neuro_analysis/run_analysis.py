@@ -39,26 +39,59 @@ def build_model(cfg):
     return model, tok, args
 
 
+def _meta(cfg, extra):
+    m = {"n_layer": cfg["n_layer"], "n_embd": cfg["n_embd"], "model_name": cfg["model_name"]}
+    m.update(extra)
+    return m
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="neuro_analysis/configs/default.yaml")
     cfg = yaml.safe_load(open(ap.parse_args().config))
     out_dir = cfg["out_dir"]; os.makedirs(out_dir, exist_ok=True)
-    archive = os.path.join(out_dir, "responses.npz")
+    conds = cfg.get("conditions", {"driven": True, "spontaneous": False})
+    stages = cfg["stages"]
+    driven_arch = os.path.join(out_dir, "responses_driven.npz")
+    spont_arch = os.path.join(out_dir, "responses_spont.npz")
 
-    if cfg["stages"]["capture"]:
+    if stages["capture"]:
         model, tok, args = build_model(cfg)
-        stimuli = datasets.DEFAULT_STIMULI
-        toks = datasets.tokenize_stimuli(tok, stimuli, cfg["token_mode"])
-        resp, lengths, aux = capture.capture(model, toks, cfg["ctx_len"], cfg["n_layer"])
-        labels = datasets.build_labels(toks, tok, cfg["token_mode"], aux=aux)
-        meta = {"n_layer": cfg["n_layer"], "n_embd": cfg["n_embd"],
-                "model_name": cfg["model_name"], "stimuli": stimuli, "lengths": lengths}
-        capture.save_archive(archive, resp, labels, meta)
-        print(f"captured -> {archive}")
 
-    if cfg["stages"]["compare"]:
-        compare.run(archive, out_dir, branch=cfg["branch"], target=cfg["target"])
+        if conds.get("driven"):
+            stimuli = datasets.DEFAULT_STIMULI
+            toks = datasets.tokenize_stimuli(tok, stimuli, cfg["token_mode"])
+            resp, lengths, aux = capture.capture(model, toks, cfg["ctx_len"], cfg["n_layer"])
+            labels = datasets.build_labels(toks, tok, cfg["token_mode"], aux=aux)
+            capture.save_archive(driven_arch, resp, labels,
+                                 _meta(cfg, {"stimuli": stimuli, "lengths": lengths,
+                                             "condition": "driven"}))
+            print(f"captured driven -> {driven_arch}")
+
+        if conds.get("spontaneous"):
+            ro = cfg.get("rollout", {})
+            prompts = datasets.DEFAULT_PROMPTS
+            ptoks = datasets.tokenize_stimuli(tok, prompts, cfg["token_mode"])
+            resp, lengths, aux, gen = capture.capture_rollout(
+                model, tok, ptoks, ro.get("n_generate", 60), cfg["ctx_len"], cfg["n_layer"],
+                temperature=ro.get("temperature", 0.8), top_p=ro.get("top_p", 0.7))
+            labels = datasets.build_labels(gen, tok, cfg["token_mode"], aux=aux)
+            capture.save_archive(spont_arch, resp, labels,
+                                 _meta(cfg, {"prompts": prompts, "lengths": lengths,
+                                             "condition": "spontaneous"}))
+            print(f"captured spontaneous -> {spont_arch}")
+
+    if stages["compare"]:
+        if conds.get("driven"):
+            compare.run(driven_arch, os.path.join(out_dir, "driven"),
+                        branch=cfg["branch"], target=cfg["target"])
+        if conds.get("spontaneous"):
+            compare.run(spont_arch, os.path.join(out_dir, "spont"),
+                        branch=cfg["branch"], target=cfg["target"])
+
+    if stages.get("contrast") and conds.get("driven") and conds.get("spontaneous"):
+        compare.run_conditions(driven_arch, spont_arch,
+                               os.path.join(out_dir, "contrast"), branch=cfg["branch"])
 
 
 if __name__ == "__main__":

@@ -27,6 +27,8 @@ figs/*.png
 figs/*.pdf
 results/*
 neuro_analysis/outputs/*
+logs/*.out
+logs/*.err
 
 # CUDA JIT build artifacts
 *.so

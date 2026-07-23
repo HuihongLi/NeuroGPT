@@ -35,11 +35,31 @@ def cv_isi_by_layer(resp, branch, n_layer):
 
 def cv_isi_by_condition(resp, labels, branch, layer,
                         condition_key="entropy", hi_q=0.75, lo_q=0.25):
-    """H4: contrast CV-ISI during high- vs low-uncertainty spans (ambiguity / prediction
-    uncertainty / semantic drift, selected via `condition_key` in labels).
+    """H4: contrast CV-ISI during high- vs low-uncertainty tokens (ambiguity / prediction
+    uncertainty / semantic drift, selected via `condition_key`). Returns
+    dict(cv_high, cv_low, delta).
 
-    TODO (M5): segment token time into high/low-`condition_key` spans (quantile split),
-    compute per-neuron CV-ISI within each span, and return (cv_high, cv_low, stat). Requires
-    a windowing choice — document the window length used.
+    Simplification: ISIs are computed over the *subset* of tokens selected by the condition
+    mask (concatenated), so an interval can span a skipped low-condition token. This measures
+    irregularity of firing restricted to high/low-condition tokens rather than within
+    contiguous windows — adequate for a first pass; document if reported.
     """
-    raise NotImplementedError("Implement condition-split CV-ISI per docstring.")
+    from .salience import _pad_label
+    T = resp["spikes"][branch].shape[1]
+    u = _pad_label(labels[condition_key], T)                 # (n_stim, T)
+    S = resp["spikes"][branch][:, :, layer, :]               # (n_stim, T, n_embd)
+    hi_th, lo_th = np.nanquantile(u, hi_q), np.nanquantile(u, lo_q)
+
+    def mean_cv(mask):
+        vals = []
+        for s in range(S.shape[0]):
+            sel = mask[s] & ~np.isnan(S[s]).any(-1)
+            seq = S[s, sel]
+            for n in range(seq.shape[1]):
+                isi = neuron_isis(seq[:, n])
+                if len(isi) > 1 and isi.mean() > 0:
+                    vals.append(isi.std() / isi.mean())
+        return float(np.mean(vals)) if vals else np.nan
+
+    cv_hi, cv_lo = mean_cv(u >= hi_th), mean_cv(u <= lo_th)
+    return {"cv_high": cv_hi, "cv_low": cv_lo, "delta": cv_hi - cv_lo}

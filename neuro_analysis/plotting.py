@@ -11,7 +11,8 @@ import matplotlib.pyplot as plt
 # Tol muted palette (same as src/spike_vis.py)
 C = {"blue": "#4477AA", "red": "#CC3311", "green": "#228833",
      "orange": "#EE7733", "purple": "#AA3377", "cyan": "#66CCEE", "gray": "#BBBBBB"}
-SIGNAL_COLOR = {"voltage": C["blue"], "spikes": C["orange"], "current": C["green"]}
+SIGNAL_COLOR = {"voltage": C["blue"], "spikes": C["orange"], "current": C["green"],
+                "joint": C["purple"], "driven": C["blue"], "spont": C["red"]}
 
 
 def _clean(ax):
@@ -54,6 +55,48 @@ def trajectories(traj_by_signal, out_path, layer=0):
         ax.scatter(tr[-1, 0], tr[-1, 1], color=C["red"], s=25, zorder=3, label="end")
         ax.set_title(f"{sig} (L{layer})", fontsize=9)
         ax.set_xlabel("PC1"); ax.set_ylabel("PC2")
+    fig.tight_layout(); fig.savefig(out_path, dpi=150); return fig
+
+
+def line_vs_depth(curves, out_path, ylabel, title="", hline=None):
+    """Generic per-layer overlay for {label: (n_layer,) array}."""
+    fig, ax = plt.subplots(figsize=(5, 3.2))
+    _clean(ax)
+    markers = "os^v"
+    for (label, y), mk in zip(curves.items(), markers * 4):
+        ax.plot(range(len(y)), y, f"-{mk}", ms=3,
+                color=SIGNAL_COLOR.get(label, None), label=label)
+    if hline is not None:
+        ax.axhline(hline, color=C["gray"], ls="--", lw=0.8)
+    ax.set_xlabel("Block index"); ax.set_ylabel(ylabel)
+    if title:
+        ax.set_title(title, fontsize=9)
+    ax.legend(frameon=False, fontsize=7)
+    fig.tight_layout(); fig.savefig(out_path, dpi=150); return fig
+
+
+def bar_vs_depth(y, out_path, ylabel, title="", color=None):
+    """Per-layer bar chart (e.g. spike–uncertainty correlation, ISI-CV)."""
+    fig, ax = plt.subplots(figsize=(5, 3.2))
+    _clean(ax)
+    ax.bar(range(len(y)), y, color=color or C["purple"])
+    ax.axhline(0, color=C["gray"], lw=0.8)
+    ax.set_xlabel("Block index"); ax.set_ylabel(ylabel)
+    if title:
+        ax.set_title(title, fontsize=9)
+    fig.tight_layout(); fig.savefig(out_path, dpi=150); return fig
+
+
+def lag_curves(curves, out_path):
+    """H3/memory: decoding accuracy vs lag for voltage vs spikes."""
+    fig, ax = plt.subplots(figsize=(5, 3.2))
+    _clean(ax)
+    for sig, d in curves.items():
+        lags = sorted(d)
+        ax.plot(lags, [d[k] for k in lags], "-o", ms=3,
+                color=SIGNAL_COLOR.get(sig), label=sig)
+    ax.set_xlabel("Lag (tokens into the past)"); ax.set_ylabel("Balanced accuracy")
+    ax.legend(frameon=False, fontsize=7)
     fig.tight_layout(); fig.savefig(out_path, dpi=150); return fig
 
 

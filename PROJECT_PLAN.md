@@ -80,6 +80,22 @@ per token, so we log `softmax(out)` alongside the hooked activations — no extr
 
 ---
 
+## Two activity regimes: driven vs spontaneous
+
+Every pipeline runs on two conditions, the artificial analogue of stimulus-evoked vs
+spontaneous neural activity:
+- **driven** — teacher-forced on real text (`DEFAULT_STIMULI`); the network is clamped to
+  ground-truth input each step (`capture.capture`).
+- **spontaneous** — the model rolls out its own continuation from a short prompt and we record
+  activity during the self-generated tokens only (`capture.capture_rollout`); the network runs
+  on its own predictions.
+
+`conditions.py` contrasts them per layer — firing rate, mean |V|, CV-ISI, participation ratio,
+and a **subspace-alignment index** (fraction of spontaneous variance captured by the driven
+condition's top-k PCs, relative to spontaneous's own; ~1 = shared subspace, ≪1 = distinct
+regimes). Question: does the network occupy the same population geometry when driven by external
+text as when free-running, or does self-rollout explore a different part of state space?
+
 ## Pipelines
 
 ### (1) Population geometry  — `geometry.py`
