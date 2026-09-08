@@ -29,8 +29,13 @@ conditions:
   driven: true
   spontaneous: true
 
+# Optional external corpora (one item per line). If null, use datasets.DEFAULT_STIMULI /
+# DEFAULT_PROMPTS. Point these at bigger files to scale token counts without editing code.
+stimuli_file: null
+prompts_file: null
+
 rollout:                # settings for the spontaneous condition
-  n_generate: 60        # tokens generated per prompt (fixed sequence length)
+  n_generate: 128       # tokens generated per prompt (fixed sequence length; longer = more data)
   temperature: 0.8
   top_p: 0.7
 

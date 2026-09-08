@@ -18,7 +18,7 @@ import numpy as np
 from . import geometry, decoding, salience, isi, plotting, track
 from .capture import load_archive
 
-ALL_STAGES = ("geometry", "identity", "salience", "joint", "memory", "isi")
+ALL_STAGES = ("geometry", "identity", "salience", "joint", "memory", "isi", "lfp")
 
 
 def run(archive_path, out_dir, branch="attn", target="is_content",
@@ -44,8 +44,11 @@ def run(archive_path, out_dir, branch="attn", target="is_content",
 
     if "identity" in stages:
         gap = decoding.voltage_spike_gap(resp, labels, branch, n_layer, target)
-        cols.update(acc_voltage=gap["voltage"], acc_spikes=gap["spikes"], gap=gap["gap"])
-        plotting.decoding_gap(gap, p("H2_decoding_gap.png"), target=target)
+        null = decoding.depth_accuracy(resp, labels, "voltage", branch, n_layer, target,
+                                       shuffle_null=True)   # shuffled-label chance baseline
+        cols.update(acc_voltage=gap["voltage"], acc_spikes=gap["spikes"], gap=gap["gap"],
+                    acc_null=null)
+        plotting.decoding_gap(gap, p("H2_decoding_gap.png"), target=target, null=null)
 
     if "salience" in stages:
         r = salience.spike_uncertainty_corr(resp, labels, branch, n_layer, key=uncertainty_key)
@@ -83,6 +86,19 @@ def run(archive_path, out_dir, branch="attn", target="is_content",
         print(f"H4 CV-ISI (entropy hi vs lo @ L{n_layer//2}): "
               f"{cond['cv_high']:.3f} vs {cond['cv_low']:.3f} (Δ={cond['delta']:+.3f})")
 
+    if "lfp" in stages:
+        from . import lfp
+        slope = lfp.slope_by_layer(resp, "current", branch, n_layer)
+        low = lfp.lowband_by_layer(resp, "current", branch, n_layer)
+        ts = lfp.timescale_by_layer(resp, "current", branch, n_layer)
+        cols.update(lfp_slope=slope, lfp_lowband=low, lfp_timescale=ts)
+        f, lp = lfp.mean_psd(resp, "current", branch)
+        plotting.psd_overlay({"LFP": (f, lp)}, p("H8_lfp_psd.png"),
+                             "synthetic LFP spectrum (all layers)")
+        plotting.line_vs_depth({"1/f slope": slope}, p("H8_lfp_slope.png"),
+                               "aperiodic slope", "LFP spectral slope vs depth")
+        print(f"LFP cross-layer synchrony: {lfp.cross_layer_synchrony(resp, 'current', branch):.3f}")
+
     _write_table(cols, os.path.join(out_dir, "summary.csv"))
     print(f"wrote {len([f for f in os.listdir(out_dir) if f.endswith('.png')])} figures "
           f"+ summary.csv to {out_dir}")
@@ -92,12 +108,16 @@ def run(archive_path, out_dir, branch="attn", target="is_content",
 def run_conditions(driven_archive, spont_archive, out_dir, branch="attn", k=10):
     """Driven-vs-spontaneous contrast: firing rate, |V|, CV-ISI, dimensionality, and subspace
     alignment per layer. Writes contrast.csv + one figure per metric."""
-    from . import conditions
+    from . import conditions, rollout_dynamics as dyn
     os.makedirs(out_dir, exist_ok=True)
-    rd, _, md = load_archive(driven_archive)
-    rs, _, _ = load_archive(spont_archive)
+    rd, ld, md = load_archive(driven_archive)
+    rs, ls, _ = load_archive(spont_archive)
     n_layer = int(md["n_layer"])
     c = conditions.contrast(rd, rs, branch, n_layer, k=k)
+    xc = conditions.cross_decode_curves(rd, ld, rs, ls, branch, n_layer,
+                                        target="is_content", signal="voltage")
+    c["cross_d2s"] = xc["d2s"]; c["cross_s2d"] = xc["s2d"]
+    c.update(dyn.dynamics_contrast(rd, rs, branch, n_layer))       # speed / velcorr / recurrence
 
     def p(name):
         return os.path.join(out_dir, name)
@@ -114,8 +134,34 @@ def run_conditions(driven_archive, spont_archive, out_dir, branch="attn", k=10):
                            p("C_subspace_alignment.png"),
                            "alignment (cross / self var, ~1 = shared)",
                            "spontaneous variance in the driven subspace", hline=1.0)
+    plotting.line_vs_depth({"driven→spont": c["cross_d2s"], "spont→driven": c["cross_s2d"]},
+                           p("C_cross_decode.png"), "transfer bal. acc. (voltage)",
+                           "cross-condition decoding of is_content", hline=0.5)
+    # rollout dynamics (primary axis): why spontaneous firing differs
+    plotting.line_vs_depth({"driven": c["speed_driven"], "spont": c["speed_spont"]},
+                           p("D_speed.png"), "mean state speed ‖ΔV‖", "trajectory speed")
+    plotting.line_vs_depth({"driven": c["velcorr_driven"], "spont": c["velcorr_spont"]},
+                           p("D_velocity_autocorr.png"), "lag-1 velocity cosine",
+                           "trajectory directedness", hline=0.0)
+    plotting.line_vs_depth({"driven": c["recurrence_driven"], "spont": c["recurrence_spont"]},
+                           p("D_recurrence.png"), "recurrence rate", "state revisiting (looping)")
+    rep_d = dyn.token_repetition(ld["token_id"]); rep_s = dyn.token_repetition(ls["token_id"])
+    print(f"token repetition (16-tok window): driven={rep_d:.3f}  spontaneous={rep_s:.3f}")
+
+    # synthetic LFP/EEG spectral contrast (driven vs spontaneous)
+    from . import lfp
+    c["lfp_slope_driven"] = lfp.slope_by_layer(rd, "current", branch, n_layer)
+    c["lfp_slope_spont"] = lfp.slope_by_layer(rs, "current", branch, n_layer)
+    fd, ld_ = lfp.mean_psd(rd, "current", branch)
+    fs, ls_ = lfp.mean_psd(rs, "current", branch)
+    plotting.psd_overlay({"driven": (fd, ld_), "spont": (fs, ls_)}, p("C_lfp_psd.png"),
+                         "synthetic LFP spectrum: driven vs spontaneous")
+    plotting.line_vs_depth({"driven": c["lfp_slope_driven"], "spont": c["lfp_slope_spont"]},
+                           p("C_lfp_slope.png"), "aperiodic 1/f slope", "LFP spectral slope")
+    print(f"LFP cross-layer synchrony: driven={lfp.cross_layer_synchrony(rd,'current',branch):.3f}"
+          f"  spont={lfp.cross_layer_synchrony(rs,'current',branch):.3f}")
     _write_table(c, os.path.join(out_dir, "contrast.csv"))
-    print(f"wrote condition-contrast figures + contrast.csv to {out_dir}")
+    print(f"wrote condition-contrast + dynamics figures + contrast.csv to {out_dir}")
     return c
 
 

@@ -1,15 +1,19 @@
-# Project Plan — Population geometry & decoding of SpikeGPT, with a voltage-vs-spike comparison
+# Project Plan — Driven vs spontaneous dynamics of SpikeGPT (with a voltage-vs-spike lens)
 
-**Goal.** Treat SpikeGPT's internal LIF activations as a neural recording and apply two
-standard neural-data-analysis pipelines — **(1) population geometry / state-space** and
-**(4) neural decoding** — to characterize how information is represented across the 18 layers
-and across token time. The *organizing question* threaded through both pipelines is:
+**Goal.** Treat SpikeGPT's internal LIF activations as a neural recording and characterize how
+its population dynamics differ between two regimes, using standard neural-data-analysis pipelines
+(population geometry, decoding, ISI statistics, rollout dynamics).
 
-> **What does binarization cost?** For every layer/branch/token we have three co-registered
-> signals from the *same* neurons — the graded pre-neuron current `I`, the reconstructed
-> membrane voltage `V` (continuous), and the emitted spike `S ∈ {0,1}`. Comparing the geometry
-> and decodability of `V` vs `S` (vs `I`) quantifies how much structure the spike-generating
-> nonlinearity discards vs. preserves.
+> **Primary axis — driven vs spontaneous.** Does the network behave differently when *driven* by
+> ground-truth text (teacher-forced) versus running *spontaneously* on its own sampled tokens
+> (autoregressive rollout)? This is the artificial analogue of stimulus-evoked vs spontaneous
+> neural activity. First results show the two regimes **share a linguistic code but differ in
+> dynamics** (see Findings) — the rollout-dynamics pipeline is built to explain *why*.
+
+> **Secondary lens — what does binarization cost?** For every layer/branch/token we have three
+> co-registered signals from the *same* neurons — graded current `I`, reconstructed membrane
+> voltage `V`, and spike `S ∈ {0,1}`. Comparing `V` vs `S` (vs `I`) quantifies how much structure
+> the spike-generating nonlinearity discards. This lens is applied *within each regime*.
 
 This is the systems-neuroscience version of the rate-vs-membrane-potential coding debate, run on
 an artificial spiking network where we have ground-truth access to all three signals.
@@ -80,6 +84,65 @@ per token, so we log `softmax(out)` alongside the hooked activations — no extr
 
 ---
 
+## Findings so far (2026-07-22, SpikeGPT-216M, attn branch) & updated directions
+
+First real two-condition run: **driven = 597 tokens / 41 passages**, **spontaneous = 480 tokens /
+8 prompts × 60**. Decoding target = content vs function word. What held up:
+
+**Robust (consistent across all 18 layers):**
+- **Voltage trajectories are smoother than spikes** (curvature V < S at every layer, both
+  conditions). *H1 supported.*
+- **Voltage out-decodes spikes when driven** — the V−S gap is **positive at all 18 driven
+  layers** (+0.01…+0.15, acc_V 0.78–0.89 vs acc_S 0.67–0.82). *H1 supported.*
+- **Joint [V‖S] adds nothing over voltage alone** (joint_gain ≈ 0 everywhere). Spikes are a
+  thresholded function of V, so V subsumes S for linear decoding. *H3 not supported — a clean
+  negative: for read-out, voltage is sufficient.*
+- **Spontaneous firing is far more irregular than driven**: CV-ISI 0.53–0.91 (spont) vs
+  0.29–0.54 (driven) at **every** layer. The biggest, most reliable regime difference. *New.*
+
+**Structured / regime-dependent (now interpretable, worth chasing):**
+- **The V>S decoding advantage is gated by the regime.** In spontaneous rollout the gap
+  collapses (negative at L0, L3, L15–17) and overall accuracy drops (0.62–0.78). Voltage's edge
+  is a property of being *externally driven*, not intrinsic. *New — reframes H1.*
+- **Participation ratio: spikes ≫ voltage, and voltage is U-shaped**, tiny mid-network (~1–2)
+  but exploding at the readout layers (L15–17: 47–67, driven). Binarization *spreads* variance
+  across many weak dimensions; voltage concentrates in a few modes then re-expands near output.
+  *H1's "voltage higher-dimensional" prediction is wrong in the PR sense — reframe as variance
+  concentration, not information.*
+- **Subspace alignment (voltage): shared core, divergent ends.** Spontaneous voltage variance
+  is almost fully captured by the driven subspace in **middle layers (align ≈ 0.94–1.0)** but
+  poorly at the **deep output layers (L15–17: 0.27–0.48)**. The two regimes share a common
+  mid-network geometry and diverge near the readout. *New.*
+- **Spike surprise-coding is layer-structured**, not uniform: spikes track surprisal positively
+  at the input (L0) and output (L16–17) layers, negatively in the middle. *Refines H2 — surprise
+  is marked at the ends, not the core.*
+- **The linguistic code is regime-invariant even though the dynamics are not.** A voltage decoder
+  trained on driven activity reads spontaneous activity at ~0.62–0.78 balanced acc, and
+  spont→driven at ~0.68–0.81 — both near the within-condition ceiling and well above 0.5. So the
+  *content/function representation transfers across regimes*, while firing irregularity (CV-ISI)
+  and deep-layer geometry differ sharply. **Dissociation: shared representation, different
+  dynamics.** *Key new result.*
+
+### Updated directions (priority order)
+1. **Promote driven-vs-spontaneous to the primary axis.** New hypotheses:
+   - **H5 — spontaneous activity is more irregular / more Poisson-like** than driven (CV-ISI,
+     and follow up with avalanche/criticality and temporal autocorrelation).
+   - **H6 — a shared "core" representational subspace in middle layers, divergence at
+     input/output layers** between the two regimes (principal angles, not just variance capture).
+   - **H7 — linguistic decodability (and the V>S gap) is regime-gated**: present when driven,
+     attenuated when free-running.
+2. **Cross-condition decoding** (train driven → test spontaneous and vice versa): does the code
+   transfer? Being added to `conditions.py` / the contrast figure set.
+3. **Rollout dynamics:** does self-rollout collapse toward attractors/repetition? Measure state
+   recurrence, trajectory speed, velocity autocorrelation; relate to sampling temperature (sweep).
+4. **Robustness fixes:** more spontaneous prompts (only 8 CV groups now → wide CIs); add
+   shuffled-label nulls to every decoder; clip/reinterpret the alignment index (cross/self can
+   exceed 1 from mean-centering — e.g. L0 = 1.30); compare attn vs ffn branch.
+5. **Synthetic LFP/EEG** (`lfp.py`, H8): field-potential analogues + spectral slope / timescale /
+   cross-layer synchrony, contrasted driven vs spontaneous. Connects to the aperiodic-exponent
+   (FOOOF) and intrinsic-timescale literature. Future: proper Welch coherence, band definitions,
+   and mapping token-rate spectra to a nominal sampling assumption.
+
 ## Two activity regimes: driven vs spontaneous
 
 Every pipeline runs on two conditions, the artificial analogue of stimulus-evoked vs
@@ -91,10 +154,38 @@ spontaneous neural activity:
   on its own predictions.
 
 `conditions.py` contrasts them per layer — firing rate, mean |V|, CV-ISI, participation ratio,
-and a **subspace-alignment index** (fraction of spontaneous variance captured by the driven
-condition's top-k PCs, relative to spontaneous's own; ~1 = shared subspace, ≪1 = distinct
-regimes). Question: does the network occupy the same population geometry when driven by external
-text as when free-running, or does self-rollout explore a different part of state space?
+a **subspace-alignment index** (fraction of spontaneous variance captured by the driven
+condition's top-k PC directions, relative to spontaneous's own; ∈[0,1], ~1 = shared subspace),
+and **cross-condition decoding** (train in one regime, test in the other — does the code transfer?).
+
+### Rollout dynamics — `rollout_dynamics.py` (PRIMARY)
+Explains *why* the spontaneous regime differs, by profiling how the population trajectory moves,
+per layer, driven vs spontaneous:
+- **speed** — mean ‖ΔV[t]‖ per token (how fast the state moves).
+- **velocity autocorrelation** — lag-1 cosine of the velocity vector: directed flow (→1) vs
+  diffusive jitter (→0).
+- **recurrence rate** — fraction of non-adjacent token pairs whose states are within a
+  per-sequence distance threshold; high ⇒ the trajectory revisits states (attractor/looping).
+- **token repetition** — fraction of generated tokens repeating within a window; a direct index
+  of self-rollout degeneration (spontaneous only).
+Hypothesis (H5): spontaneous rollout is more recurrent / lower-velocity-autocorrelation (drifts
+toward attractors and loops), which also drives its higher CV-ISI.
+
+### Synthetic LFP / EEG — `lfp.py`
+Build field-potential analogues from the same activations and analyze them with standard
+electrophysiology spectral tools:
+- **LFP_layer[t]** = population-mean pre-neuron **current** of a layer (∼ summed synaptic
+  currents); **EEG_global[t]** = sum of the per-layer LFPs (spatially-pooled proxy).
+- Per layer: **aperiodic 1/f slope** (log-log spectral slope / "aperiodic exponent"),
+  **low-band power fraction**, **intrinsic timescale** (lag-1 autocorrelation), plus
+  **cross-layer synchrony** (mean pairwise correlation of layer LFPs ∼ inter-electrode coherence).
+- Caveat baked into the code: time is the **token step**, so frequencies are in **cycles/token
+  (Nyquist 0.5), not Hz**, and sequences are short → report robust low-resolution summaries, not
+  sharp peaks.
+Hypothesis (**H8**): the spontaneous regime has a **steeper 1/f slope / longer intrinsic
+timescale** (more low-frequency drift, consistent with looping) and different cross-layer
+synchrony than the driven regime — an LFP-level signature of the same dynamics difference H5
+measures at the trajectory level.
 
 ## Pipelines
 
@@ -158,20 +249,19 @@ Assembles the H1–H4 figures and a per-layer summary table
 
 ## Milestones
 
-- **M0 — capture harness** (`capture.py`): hooks record spikes+current for *both* branches; log
-  per-token logits (→ surprisal/entropy); reset-safe stimulus loop; export the canonical archive.
-- **M1 — representations** (`representations.py`): `(neuron×token)` matrices + `rate` smoothing;
-  sanity plots reproducing `spike_vis` firing-rate/V numbers.
-- **M2 — geometry** (`geometry.py`): PCA/PR/jPCA + trajectory smoothness + lagged-decoding memory
-  curves for V/S/I → **H1** figures.
-- **M3 — decoding** (`decoding.py`): grouped-CV decoders + null; V-only / S-only / joint `[V‖S]`;
-  accuracy-vs-layer, V−S gap (**H1**) and joint-gain (**H3**) figures.
-- **M4 — salience** (`salience.py`): spike↔surprisal/entropy correlation, spike-triggered
-  high/low-surprisal contrast → **H2** figure.
-- **M5 — irregularity** (`isi.py`): ISI + CV-ISI by layer and condition (ambiguity / uncertainty /
-  semantic drift) → **H4** figure.
-- **M6 — writeup** (`compare.py`): combined summary table + figure panel; the
-  "when is spike-only sufficient?" verdict per layer.
+- **M0–M6 — done.** Capture harness (both branches + logits), representations, geometry
+  (PR/jPCA/smoothness), decoding (grouped-CV + null + joint `[V‖S]` + lagged), salience, ISI,
+  and the `compare.run` battery — all implemented and run on the 216M model.
+- **M7 — two-regime capture — done.** `capture.capture_rollout` (spontaneous) + driven; per-regime
+  battery + `compare.run_conditions` contrast (rate, |V|, CV-ISI, PR, subspace alignment,
+  cross-condition decoding).
+- **M8 — rollout dynamics (PRIMARY, current)** (`rollout_dynamics.py`): speed, velocity
+  autocorrelation, recurrence rate, token repetition → **H5** (driven vs spontaneous dynamics).
+- **M9 — robustness**: shuffled-label nulls on every decoder (done for identity), bounded
+  subspace-alignment metric (fixed), more spontaneous prompts + longer rollout (`n_generate`),
+  optional external corpora (`stimuli_file`/`prompts_file`); TODO: attn-vs-ffn sweep, principal
+  angles, temperature sweep of the rollout.
+- **M10 — writeup**: the "shared code, different dynamics" story across regimes.
 
 ## How to run
 ```

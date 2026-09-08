@@ -59,7 +59,8 @@ def main():
         model, tok, args = build_model(cfg)
 
         if conds.get("driven"):
-            stimuli = datasets.DEFAULT_STIMULI
+            stimuli = (datasets.load_lines(cfg["stimuli_file"])
+                       if cfg.get("stimuli_file") else datasets.DEFAULT_STIMULI)
             toks = datasets.tokenize_stimuli(tok, stimuli, cfg["token_mode"])
             resp, lengths, aux = capture.capture(model, toks, cfg["ctx_len"], cfg["n_layer"])
             labels = datasets.build_labels(toks, tok, cfg["token_mode"], aux=aux)
@@ -70,7 +71,8 @@ def main():
 
         if conds.get("spontaneous"):
             ro = cfg.get("rollout", {})
-            prompts = datasets.DEFAULT_PROMPTS
+            prompts = (datasets.load_lines(cfg["prompts_file"])
+                       if cfg.get("prompts_file") else datasets.DEFAULT_PROMPTS)
             ptoks = datasets.tokenize_stimuli(tok, prompts, cfg["token_mode"])
             resp, lengths, aux, gen = capture.capture_rollout(
                 model, tok, ptoks, ro.get("n_generate", 60), cfg["ctx_len"], cfg["n_layer"],

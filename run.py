@@ -69,12 +69,12 @@ os.environ["RWKV_RUN_DEVICE"] = args.RUN_DEVICE
 #context = 'Pinky \n The pink ghost’s AI is designed to ”feel” opposite of the red ghost’s behavior. Pinky actually attempts to get out in front of Pac-Man. This is accomplished by setting the target 4 tiles ahead of Pac-Man’s current location in the direction that Pac-Man is travelling. One exception to this is when Pac-Man is traveling up. Due to an overflow bug in the code, the calculation includes a left offset equal to the expected up offset.'
 #context = '''Corporal Michael P. Goeldin was an unskilled laborer from Ireland when he enlisted in Company A in November 1860. Goldein survived the war. Corporal Patrick O’Neal, also from Ireland, first enlisted in 1854 and served with Company L, 3d U.S. Artillery, in Oregon. He returned to the East Coast and enlisted in the company in 1860. O’Neal served until 1874, when he was named superintendent of the National Cemetery at Willets Point, New York. Corporal Benjamin Browne was a shoemaker from Orange County, New York. In August 1862, he enlisted in the newly formed 124th New York Volunteers, and was one of sixty-one men who transferred into Company A that October. Browne reenlisted in the company in February 1864 while it was camped at Brandy Station. He returned to civilian life after completing his enlistment in 1867.
 #On 10 June, Artificer William Collins was promoted to corporal, probably to fill a combat leadership void for the crossing of the James River. Collins’s service record does not reflect the qualities he demonstrated to earn this promotion, but he had obviously overcome some serious problems. Born in Sacketts Harbor, New York, Collins enlisted in the company in December 1853 at the age of twenty-two, and reenlisted in December 1858. Just a month before the war began in April 1861, Collins went ”over the hill” and was not caught until three years later. Returned to the company on 22 March 1864, he was tried'''
-#context = 'Aaron loves mint chocolate cake, but he requires that it be paired with mini chocolate chips, so I threw some of those in between the layers. I also had a few Peppermint Jo Jos on hand so I crushed them up and threw some of those in along with some crushed meringue cookies because, why not? It’s a total smorgasbord of minty chocolate chippy cookie crunchy goodness. I didn’t measure how much of each topping I used, but after I tasted the finished product, I wish I had added more. You can add anything you want- crushed candy canes, peppermint bark, etc. And don’t be afraid to use a heavy hand. Texture = good.'
+# context = 'Aaron loves mint chocolate cake, but he requires that it be paired with mini chocolate chips, so I threw some of those in between the layers. I also had a few Peppermint Jo Jos on hand so I crushed them up and threw some of those in along with some crushed meringue cookies because, why not? It’s a total smorgasbord of minty chocolate chippy cookie crunchy goodness. I didn’t measure how much of each topping I used, but after I tasted the finished product, I wish I had added more. You can add anything you want- crushed candy canes, peppermint bark, etc. And don’t be afraid to use a heavy hand. Texture = good.'
 # context = 'Prehistoric man sketched an incredible array of prehistoric beasts on the rough limestone walls of a cave in modern day France 36,000 years ago. Now, with the help of cutting-edge technology, those works of art in the Chauvet-Pont-d’Arc Cave have been reproduced to create the biggest replica cave in the world. The manmade cavern named the Caverne du Pont-d’Arc has been built a few miles from the original site in Vallon-Pont-D’arc in Southern France and contains 1,000 painstakingly-reproduced drawings as well as around 450 bones and other features...\n Cavemen and women sketched an incredible array of prehistoric beasts on the rough limestone walls of a cave 36,000 years ago and now a replica has been created (pictured)'
 # context = '\nSugar:'
 # context = "In a shocking finding, scientist discovered a herd of dragons living in a remote, previously unexplored valley, in Tibet. Even more surprising to the researchers was the fact that the dragons spoke perfect Chinese."
 
-# context = "\n深圳是" # test Chinese
+# context = "\n用户：你怎么样，请问你是谁\n回答：" # test Chinese
 # context = "\n東京は" # test Japanese
 
 # ###### A good prompt for Q&A ######
@@ -94,9 +94,6 @@ Question: What is an action potential?
 Answer: An action potential is a brief electrical event generated when a neuron’s membrane potential crosses a threshold. It allows neurons to transmit information as discrete spikes.
 
 Question: What is membrane potential?
-Answer: Membrane potential is the voltage difference across a neuron’s membrane. Subthreshold changes in membrane potential reflect incoming signals even when the neuron does not produce a spike.
-
-Question: What information may be present in membrane-potential dynamics but absent from binary spike trains, and how can the mean inter-spike interval and ISI coefficient of variation be used to characterize neuronal firing?
 Answer: 
 """
 
@@ -126,7 +123,7 @@ Answer:
 NUM_TRIALS = 1
 LENGTH_PER_TRIAL = 333
 
-TEMPERATURE = 0.8
+TEMPERATURE = 1.5
 top_p = 0.7
 top_p_newline = 0.9  # only used in TOKEN_MODE = char
 

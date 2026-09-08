@@ -31,12 +31,15 @@ def dimensionality_vs_depth(curves, out_path, ylabel="Participation ratio"):
     fig.tight_layout(); fig.savefig(out_path, dpi=150); return fig
 
 
-def decoding_gap(gap, out_path, target=""):
-    """H2: acc(voltage) and acc(spikes) vs layer + the gap on a twin axis."""
+def decoding_gap(gap, out_path, target="", null=None):
+    """H2: acc(voltage) and acc(spikes) vs layer + the gap on a twin axis.
+    `null` (optional) = shuffled-label baseline curve, drawn as a dashed reference."""
     fig, ax = plt.subplots(figsize=(5, 3.2))
     _clean(ax)
     ax.plot(gap["voltage"], "-o", ms=3, color=SIGNAL_COLOR["voltage"], label="voltage")
     ax.plot(gap["spikes"], "-s", ms=3, color=SIGNAL_COLOR["spikes"], label="spikes")
+    if null is not None:
+        ax.plot(null, "--", lw=1, color=C["gray"], label="shuffled null")
     ax.set_xlabel("Block index"); ax.set_ylabel(f"Decode {target} (bal. acc.)")
     ax2 = ax.twinx()
     ax2.bar(range(len(gap["gap"])), gap["gap"], alpha=0.15, color=C["red"])
@@ -84,6 +87,19 @@ def bar_vs_depth(y, out_path, ylabel, title="", color=None):
     ax.set_xlabel("Block index"); ax.set_ylabel(ylabel)
     if title:
         ax.set_title(title, fontsize=9)
+    fig.tight_layout(); fig.savefig(out_path, dpi=150); return fig
+
+
+def psd_overlay(psds, out_path, title="synthetic LFP power spectrum"):
+    """log-log PSD overlay: {label: (freq_grid, mean_log10_power)}. Frequency in cycles/token."""
+    fig, ax = plt.subplots(figsize=(5, 3.2))
+    _clean(ax)
+    for label, (f, lp) in psds.items():
+        ax.plot(np.log10(f), lp, "-o", ms=3, color=SIGNAL_COLOR.get(label), label=label)
+    ax.set_xlabel("log10 frequency (cycles/token)")
+    ax.set_ylabel("log10 power")
+    ax.set_title(title, fontsize=9)
+    ax.legend(frameon=False, fontsize=7)
     fig.tight_layout(); fig.savefig(out_path, dpi=150); return fig
 
 
